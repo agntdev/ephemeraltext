@@ -1,0 +1,18 @@
+[
+  {
+    "name": "a malformed link shows a friendly invalid notice",
+    "steps": [
+      { "send": { "text": "/read not a real token!" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "⚠️ That link doesn't look valid. Please check that you copied the full share link." } } ] }
+    ]
+  },
+  {
+    "name": "a valid-looking but unknown token shows the gone notice",
+    "steps": [
+      { "send": { "text": "/read AAAAAAAAAAAAAAAAAAAAAAA" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "❓ That message doesn't exist or has already been viewed." } } ] }
+    ]
+  }
+]
