@@ -3,6 +3,7 @@ import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
 import { createMessageStore, generatePublicToken } from "./messages.js";
 import { encrypt, generateDataKey } from "./crypto.js";
+import { createKms } from "./kms.js";
 import type { ExpiryMode } from "./types.js";
 
 export type { ExpiryMode };
@@ -134,6 +135,9 @@ export function buildBot(token: string) {
   // Durable store for shared messages (Redis in prod, in-process in dev/tests).
   const messageStore = createMessageStore();
 
+  // Key management for envelope encryption (AWS KMS in prod, local key otherwise).
+  const kms = createKms();
+
   // /start — greet the user and show the main menu.
   bot.command("start", async (ctx) => {
     await ctx.reply(WELCOME, { reply_markup: MAIN_MENU });
@@ -172,9 +176,11 @@ export function buildBot(token: string) {
         // draft is then cleared from the session.
         const token = generatePublicToken();
         const dataKey = generateDataKey();
+        const payload = encrypt(draft.text, dataKey);
+        const wrappedDataKey = await kms.wrap(dataKey);
         await messageStore.save(token, {
-          payload: encrypt(draft.text, dataKey),
-          dataKey: dataKey.toString("base64"),
+          payload,
+          wrappedDataKey,
           mode,
           createdAt: Date.now(),
         });

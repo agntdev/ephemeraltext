@@ -2,6 +2,7 @@ import { Redis } from "ioredis";
 import { randomBytes } from "node:crypto";
 import type { ExpiryMode } from "./types.js";
 import type { EncryptedPayload } from "./crypto.js";
+import type { WrappedDataKey } from "./kms.js";
 
 // Durable storage for shared ephemeral messages, keyed by their public token.
 // Production uses Redis (REDIS_URL); local dev and the tokenless test harness use
@@ -11,9 +12,8 @@ import type { EncryptedPayload } from "./crypto.js";
 export interface StoredMessage {
   // The message text, encrypted under its own per-message data key.
   payload: EncryptedPayload;
-  // The per-message data key, base64. Stored wrapped by the master key once KMS
-  // integration lands; held as-is until then.
-  dataKey: string;
+  // The per-message data key, wrapped by the KMS master key (envelope encryption).
+  wrappedDataKey: WrappedDataKey;
   mode: ExpiryMode;
   createdAt: number;
 }
