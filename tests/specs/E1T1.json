@@ -3,26 +3,43 @@
     "name": "/upload asks for the message text",
     "steps": [
       {
-        "send": { "text": "/upload" },
+        "send": {
+          "text": "/upload"
+        },
         "expect": [
           {
             "method": "sendMessage",
-            "payload": { "text": "📝 Send me the text you want to share as an ephemeral message." }
+            "payload": {
+              "text": "📝 Send me the text you want to share as an ephemeral message."
+            }
           }
         ]
       }
     ]
   },
   {
-    "name": "/upload then text captures the draft",
+    "name": "/upload then text moves to the expiry-mode prompt",
     "steps": [
-      { "send": { "text": "/upload" }, "expect": [{ "method": "sendMessage" }] },
       {
-        "send": { "text": "Hello secret" },
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "Hello secret"
+        },
         "expect": [
           {
             "method": "sendMessage",
-            "payload": { "text": "✅ Got your message (12 characters). It's ready to be sealed." }
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
           }
         ]
       }
@@ -31,7 +48,12 @@
   {
     "name": "plain text without /upload is not captured",
     "steps": [
-      { "send": { "text": "just chatting" }, "expect": [] }
+      {
+        "send": {
+          "text": "just chatting"
+        },
+        "expect": []
+      }
     ]
   }
 ]
