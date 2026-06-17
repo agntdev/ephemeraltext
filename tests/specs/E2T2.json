@@ -1,0 +1,11 @@
+[
+  {
+    "name": "sealing still works with KMS-wrapped data keys",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "Top secret payload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:first-read", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  }
+]

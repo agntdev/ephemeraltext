@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@agntdev/bot-toolkit": "^0.1.0",
+    "@aws-sdk/client-kms": "^3.658.0",
     "grammy": "^1.30.0",
     "ioredis": "^5.4.1"
   },
