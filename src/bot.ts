@@ -87,6 +87,10 @@ const DURATIONS: { key: string; label: string; ms: number }[] = [
 ];
 const DURATION_BY_KEY = new Map(DURATIONS.map((d) => [d.key, d]));
 
+// Backstop retention for first-read messages that are never opened, after which
+// they are auto-deleted from storage.
+const FIRST_READ_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 const DURATION_PROMPT = "⏱ How long should this message stay available?";
 const DURATION_MENU = {
   inline_keyboard: DURATIONS.map((d) => [
@@ -171,6 +175,7 @@ export function buildBot(token: string) {
     mode: ExpiryMode,
     expiresAt: number | null,
   ): Promise<void> {
+    const now = Date.now();
     const token = generatePublicToken();
     const dataKey = generateDataKey();
     const message = newMessage({
@@ -178,10 +183,16 @@ export function buildBot(token: string) {
       encryptedPayload: encrypt(text, dataKey),
       wrappedDataKey: await kms.wrap(dataKey),
       mode,
-      createdAt: Date.now(),
+      createdAt: now,
       expiresAt,
     });
-    await messageStore.save(message);
+    // Schedule automatic deletion: at the expiry for time-limited messages, or a
+    // retention cap for first-read messages that are never opened.
+    const ttlMs =
+      expiresAt !== null
+        ? Math.max(1000, expiresAt - now)
+        : FIRST_READ_RETENTION_MS;
+    await messageStore.save(message, Math.ceil(ttlMs / 1000));
     ctx.session.upload = undefined;
     await ctx.editMessageText(sealedText(mode, shareLink(token)));
   }

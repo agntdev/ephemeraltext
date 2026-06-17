@@ -54,7 +54,9 @@ export function newMessage(fields: {
 }
 
 export interface MessageStore {
-  save(message: Message): Promise<void>;
+  // ttlSeconds, when given, schedules automatic deletion of the record so even
+  // never-read messages are eventually purged.
+  save(message: Message, ttlSeconds?: number): Promise<void>;
   load(publicToken: string): Promise<Message | null>;
   delete(publicToken: string): Promise<void>;
 }
@@ -65,8 +67,14 @@ const keyFor = (token: string) => `message:${token}`;
 export class RedisMessageStore implements MessageStore {
   constructor(private readonly redis: Redis) {}
 
-  async save(message: Message): Promise<void> {
-    await this.redis.set(keyFor(message.publicToken), JSON.stringify(message));
+  async save(message: Message, ttlSeconds?: number): Promise<void> {
+    const key = keyFor(message.publicToken);
+    const value = JSON.stringify(message);
+    if (ttlSeconds && ttlSeconds > 0) {
+      await this.redis.set(key, value, "EX", Math.ceil(ttlSeconds));
+    } else {
+      await this.redis.set(key, value);
+    }
   }
 
   async load(publicToken: string): Promise<Message | null> {
@@ -83,7 +91,9 @@ export class RedisMessageStore implements MessageStore {
 export class MemoryMessageStore implements MessageStore {
   private readonly messages = new Map<string, Message>();
 
-  async save(message: Message): Promise<void> {
+  // The in-process fallback does not enforce TTL (no background expiry); the
+  // read path still rejects expired messages. Production (Redis) honors the TTL.
+  async save(message: Message, _ttlSeconds?: number): Promise<void> {
     this.messages.set(keyFor(message.publicToken), message);
   }
 

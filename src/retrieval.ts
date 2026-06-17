@@ -1,4 +1,4 @@
-import { decrypt } from "./crypto.js";
+import { decrypt, wipe } from "./crypto.js";
 import type { Kms } from "./kms.js";
 import type { Message, MessageStore } from "./messages.js";
 
@@ -33,12 +33,19 @@ export async function readMessage(
     return { status: "expired" };
   }
 
-  // Decrypt: unwrap the per-message data key, then decrypt the payload.
+  // Decrypt: unwrap the per-message data key, then decrypt the payload. The key
+  // material is wiped from memory as soon as the plaintext is recovered.
   const dataKey = await kms.unwrap(message.wrappedDataKey);
-  const text = decrypt(message.encryptedPayload, dataKey);
+  let text: string;
+  try {
+    text = decrypt(message.encryptedPayload, dataKey);
+  } finally {
+    wipe(dataKey);
+  }
 
   if (message.mode === "first-read") {
-    // One-time view: destroy the payload immediately after a successful read.
+    // One-time view: securely delete the record immediately after a successful
+    // read so the ciphertext can never be retrieved again.
     await store.delete(token);
     return { status: "ok", text, oneTimeView: true };
   }

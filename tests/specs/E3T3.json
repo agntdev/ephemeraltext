@@ -1,0 +1,19 @@
+[
+  {
+    "name": "first-read message still seals after secure-deletion changes",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "Burn after reading" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:first-read", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  },
+  {
+    "name": "reading a deleted/unknown token reports it is gone",
+    "steps": [
+      { "send": { "text": "/read alreadydeletedtoken" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "❓ That message doesn't exist or has already been viewed." } } ] }
+    ]
+  }
+]
