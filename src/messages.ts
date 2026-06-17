@@ -123,3 +123,12 @@ const TOKEN_BYTES = 17;
 export function generatePublicToken(): string {
   return randomBytes(TOKEN_BYTES).toString("base64url");
 }
+
+// A valid token is base64url (A-Za-z0-9_-). 17 bytes encode to 23 chars; allow a
+// small range so the check is robust to token-size tweaks.
+const TOKEN_RE = /^[A-Za-z0-9_-]{22,24}$/;
+
+/** True if `token` has the shape of a public token (cheap pre-lookup check). */
+export function isValidPublicToken(token: string): boolean {
+  return TOKEN_RE.test(token);
+}

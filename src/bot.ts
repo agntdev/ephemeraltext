@@ -1,7 +1,12 @@
 import { createBot, type BotContext } from "@agntdev/bot-toolkit";
 import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
-import { createMessageStore, generatePublicToken, newMessage } from "./messages.js";
+import {
+  createMessageStore,
+  generatePublicToken,
+  isValidPublicToken,
+  newMessage,
+} from "./messages.js";
 import { encrypt, generateDataKey } from "./crypto.js";
 import { createKms } from "./kms.js";
 import { readMessage } from "./retrieval.js";
@@ -129,6 +134,8 @@ const ABUSIVE_TEXT =
 // /read — copy for viewing a shared message by its public token.
 const READ_USAGE_TEXT =
   "Usage: /read <token>\n\nThe token is the last part of a share link (…/r/<token>).";
+const READ_INVALID_TEXT =
+  "⚠️ That link doesn't look valid. Please check that you copied the full share link.";
 const READ_NOT_FOUND_TEXT =
   "❓ That message doesn't exist or has already been viewed.";
 const READ_EXPIRED_TEXT = "⌛ That message has expired and is no longer available.";
@@ -220,6 +227,11 @@ export function buildBot(token: string) {
     const token = ctx.match.trim();
     if (!token) {
       await ctx.reply(READ_USAGE_TEXT);
+      return;
+    }
+    // Reject malformed links before touching storage — a friendly "invalid" page.
+    if (!isValidPublicToken(token)) {
+      await ctx.reply(READ_INVALID_TEXT);
       return;
     }
     const result = await readMessage(messageStore, kms, token);
