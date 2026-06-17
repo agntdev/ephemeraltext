@@ -2,6 +2,7 @@ import { createBot } from "@agntdev/bot-toolkit";
 import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
 import { createMessageStore, generatePublicToken } from "./messages.js";
+import { encrypt, generateDataKey } from "./crypto.js";
 import type { ExpiryMode } from "./types.js";
 
 export type { ExpiryMode };
@@ -166,11 +167,14 @@ export function buildBot(token: string) {
         data === "upload:mode:first-read" ? "first-read" : "time-limited";
       const draft = ctx.session.upload;
       if (draft?.stage === "awaiting_mode" && draft.text) {
-        // Seal the draft: store it under a fresh public token and hand back the
-        // shareable link. The draft is then cleared from the session.
+        // Seal the draft: encrypt the text under a fresh per-message data key,
+        // store it under a public token, and hand back the shareable link. The
+        // draft is then cleared from the session.
         const token = generatePublicToken();
+        const dataKey = generateDataKey();
         await messageStore.save(token, {
-          text: draft.text,
+          payload: encrypt(draft.text, dataKey),
+          dataKey: dataKey.toString("base64"),
           mode,
           createdAt: Date.now(),
         });

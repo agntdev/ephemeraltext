@@ -1,0 +1,11 @@
+[
+  {
+    "name": "sealing a message still returns a share link after encryption",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "Top secret payload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:time-limited", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  }
+]
