@@ -1,0 +1,11 @@
+[
+  {
+    "name": "a normal upload passes the HMAC-hashed rate-limit check",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "hello" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "✅ Got your message. How should it expire?" } } ] }
+    ]
+  }
+]

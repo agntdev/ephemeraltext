@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { Redis } from "ioredis";
+import { hashSenderId } from "./identity.js";
 
 // Per-user upload rate limiting. Counters must survive restarts, so production
 // keeps them in Redis (REDIS_URL). The tokenless test harness and local dev have
@@ -57,11 +57,6 @@ export function createRateLimitBackend(): RateLimitBackend {
     return new RedisRateLimitBackend(new Redis(url));
   }
   return new MemoryRateLimitBackend();
-}
-
-/** Hash a Telegram sender id so raw ids are never used as storage keys. */
-export function hashSenderId(id: number): string {
-  return createHash("sha256").update(String(id)).digest("hex");
 }
 
 export interface RateLimiterOptions {
