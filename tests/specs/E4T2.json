@@ -1,0 +1,10 @@
+[
+  {
+    "name": "non-admin /admin logs is denied (and nothing is logged)",
+    "steps": [
+      { "send": { "text": "/admin logs" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "⛔ You are not authorized to use this command." } } ] }
+    ]
+  }
+]
