@@ -1,0 +1,18 @@
+[
+  {
+    "name": "/admin is rejected for non-admin users",
+    "steps": [
+      { "send": { "text": "/admin" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "⛔ You are not authorized to use this command." } } ] }
+    ]
+  },
+  {
+    "name": "/admin metrics is rejected for non-admin users",
+    "steps": [
+      { "send": { "text": "/admin metrics" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "⛔ You are not authorized to use this command." } } ] }
+    ]
+  }
+]
