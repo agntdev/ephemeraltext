@@ -1,0 +1,54 @@
+[
+  {
+    "name": "/start shows the welcome and main menu",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "🔥 Welcome to EphemeralText — send encrypted, self-destructing messages. Use /help to get started.",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [{ "text": "📝 New Message", "callback_data": "menu:new" }],
+                  [{ "text": "ℹ️ About", "callback_data": "menu:about" }]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "main menu routes to New Message and back",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "menu:new", "messageId": 100 },
+        "expect": [
+          { "method": "editMessageText", "payload": { "text": "📝 New ephemeral message\n\nSend /upload to create an encrypted message that self-destructs after it is read." } }
+        ]
+      },
+      {
+        "send": { "callback": "menu:home", "messageId": 100 },
+        "expect": [
+          { "method": "editMessageText", "payload": { "text": "🔥 Welcome to EphemeralText — send encrypted, self-destructing messages. Use /help to get started." } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "main menu shows About",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "menu:about", "messageId": 100 },
+        "expect": [
+          { "method": "editMessageText", "payload": { "text": "ℹ️ About EphemeralText\n\nMessages are encrypted and shared via a one-time link. Each message self-destructs on first read or when its timer expires — nothing is kept afterwards." } }
+        ]
+      }
+    ]
+  }
+]
