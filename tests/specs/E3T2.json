@@ -1,0 +1,37 @@
+[
+  {
+    "name": "time-limited mode asks for a duration",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "Expires later" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:time-limited", "messageId": 100 },
+        "expect": [ { "method": "editMessageText",
+          "payload": { "text": "⏱ How long should this message stay available?",
+            "reply_markup": { "inline_keyboard": [
+              [ { "text": "1 hour", "callback_data": "upload:ttl:1h" } ],
+              [ { "text": "1 day", "callback_data": "upload:ttl:1d" } ],
+              [ { "text": "7 days", "callback_data": "upload:ttl:7d" } ]
+            ] } } } ] }
+    ]
+  },
+  {
+    "name": "selecting a duration seals the time-limited message",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "Expires later" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:time-limited", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] },
+      { "send": { "callback": "upload:ttl:7d", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  },
+  {
+    "name": "first-read mode still seals immediately without a duration",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "One time only" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:first-read", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  }
+]
