@@ -10,6 +10,9 @@ import {
 import { encrypt, generateDataKey } from "./crypto.js";
 import { createKms } from "./kms.js";
 import { readMessage } from "./retrieval.js";
+import { isAdmin } from "./admin.js";
+import { createAuditLog, type AuditEntry } from "./audit.js";
+import { hashSenderId } from "./identity.js";
 import type { ExpiryMode } from "./types.js";
 
 export type { ExpiryMode };
@@ -142,6 +145,28 @@ const READ_EXPIRED_TEXT = "⌛ That message has expired and is no longer availab
 const ONE_TIME_VIEW_NOTICE =
   "\n\n🔥 This was a one-time message — it has now been permanently deleted.";
 
+// /admin — moderation surface, restricted to configured admins.
+const ADMIN_DENIED_TEXT = "⛔ You are not authorized to use this command.";
+const ADMIN_MENU_TEXT =
+  "🛠 Admin panel\n\nCommands:\n/admin metrics — usage metrics\n/admin logs — recent admin actions\n/admin delete <token> — delete a message";
+const ADMIN_MENU = {
+  inline_keyboard: [
+    [{ text: "📊 Metrics", callback_data: "admin:metrics" }],
+    [{ text: "📜 Logs", callback_data: "admin:logs" }],
+  ],
+};
+const ADMIN_DELETE_USAGE = "Usage: /admin delete <token>";
+const ADMIN_NO_LOGS_TEXT = "📜 No admin actions logged yet.";
+
+function formatAuditLog(entries: AuditEntry[]): string {
+  const lines = entries.map((e) => {
+    const when = new Date(e.at).toISOString();
+    const target = e.target ? ` ${e.target}` : "";
+    return `• ${when} — ${e.action}${target} by ${e.operator.slice(0, 8)}…`;
+  });
+  return `📜 Recent admin actions:\n${lines.join("\n")}`;
+}
+
 // Shown when the user sends a command the bot does not recognize.
 const UNKNOWN_COMMAND_TEXT =
   "🤔 I don't recognize that command. Use /help to see what I can do.";
@@ -173,6 +198,19 @@ export function buildBot(token: string) {
 
   // Key management for envelope encryption (AWS KMS in prod, local key otherwise).
   const kms = createKms();
+
+  // Append-only audit log of admin actions (Redis in prod, in-process otherwise).
+  const auditLog = createAuditLog();
+
+  // Admin views, shared by the /admin subcommands and the inline-menu buttons.
+  async function showMetrics(ctx: BotContext<Session>): Promise<void> {
+    const stored = await messageStore.count();
+    await ctx.reply(`📊 Messages currently stored: ${stored}`);
+  }
+  async function showLogs(ctx: BotContext<Session>): Promise<void> {
+    const entries = await auditLog.recent(10);
+    await ctx.reply(entries.length ? formatAuditLog(entries) : ADMIN_NO_LOGS_TEXT);
+  }
 
   // Seal a captured draft: encrypt under a fresh data key, persist a Message, and
   // edit the prompt into the shareable-link message. Shared by both expiry modes.
@@ -247,6 +285,40 @@ export function buildBot(token: string) {
     await ctx.reply(`📨 ${result.text}${notice}`);
   });
 
+  // /admin [metrics|logs|delete <token>] — moderation surface for admins only.
+  bot.command("admin", async (ctx) => {
+    if (!isAdmin(ctx.from?.id)) {
+      await ctx.reply(ADMIN_DENIED_TEXT);
+      return;
+    }
+    const args = ctx.match.trim().split(/\s+/).filter(Boolean);
+    const sub = args[0]?.toLowerCase();
+    if (sub === "metrics") {
+      await showMetrics(ctx);
+    } else if (sub === "logs") {
+      await showLogs(ctx);
+    } else if (sub === "delete") {
+      const token = args[1];
+      if (!token || !isValidPublicToken(token)) {
+        await ctx.reply(ADMIN_DELETE_USAGE);
+        return;
+      }
+      const existing = await messageStore.load(token);
+      await messageStore.delete(token);
+      await auditLog.record({
+        action: "delete",
+        operator: hashSenderId(ctx.from!.id),
+        target: token,
+        at: Date.now(),
+      });
+      await ctx.reply(
+        existing ? `🗑 Message ${token} deleted.` : `Message ${token} was not found.`,
+      );
+    } else {
+      await ctx.reply(ADMIN_MENU_TEXT, { reply_markup: ADMIN_MENU });
+    }
+  });
+
   // Main-menu navigation. Each branch routes to a top-level feature and offers
   // a way back, so every button is reachable and does real work.
   bot.on("callback_query:data", async (ctx) => {
@@ -287,6 +359,14 @@ export function buildBot(token: string) {
         await sealDraft(ctx, draft.text, "time-limited", Date.now() + duration.ms);
       } else {
         await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+      }
+    } else if (data === "admin:metrics" || data === "admin:logs") {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply(ADMIN_DENIED_TEXT);
+      } else if (data === "admin:metrics") {
+        await showMetrics(ctx);
+      } else {
+        await showLogs(ctx);
       }
     }
 

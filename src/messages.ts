@@ -59,6 +59,8 @@ export interface MessageStore {
   save(message: Message, ttlSeconds?: number): Promise<void>;
   load(publicToken: string): Promise<Message | null>;
   delete(publicToken: string): Promise<void>;
+  // Number of messages currently stored (for admin metrics).
+  count(): Promise<number>;
 }
 
 const keyFor = (token: string) => `message:${token}`;
@@ -85,6 +87,23 @@ export class RedisMessageStore implements MessageStore {
   async delete(publicToken: string): Promise<void> {
     await this.redis.del(keyFor(publicToken));
   }
+
+  async count(): Promise<number> {
+    let cursor = "0";
+    let total = 0;
+    do {
+      const [next, keys] = await this.redis.scan(
+        cursor,
+        "MATCH",
+        keyFor("*"),
+        "COUNT",
+        100,
+      );
+      cursor = next;
+      total += keys.length;
+    } while (cursor !== "0");
+    return total;
+  }
 }
 
 /** In-process store for local dev and the tokenless test harness only. */
@@ -103,6 +122,10 @@ export class MemoryMessageStore implements MessageStore {
 
   async delete(publicToken: string): Promise<void> {
     this.messages.delete(keyFor(publicToken));
+  }
+
+  async count(): Promise<number> {
+    return this.messages.size;
   }
 }
 
