@@ -1,0 +1,316 @@
+[
+  {
+    "name": "message with too many links is rejected",
+    "steps": [
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "http://a.com http://b.com http://c.com http://d.com"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "🚫 That message looks like spam and can't be shared. Please revise it and try again."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "message with a long repeated-character run is rejected",
+    "steps": [
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "🚫 That message looks like spam and can't be shared. Please revise it and try again."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "eleventh upload within an hour is rate limited",
+    "steps": [
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 0"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 1"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 2"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 3"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 4"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 5"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 6"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 7"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 8"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 9"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Got your message. How should it expire?"
+            }
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "secret number 10"
+        },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "⏳ You've reached the limit of 10 uploads per hour. Please try again later."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

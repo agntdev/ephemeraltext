@@ -1,4 +1,6 @@
 import { createBot } from "@agntdev/bot-toolkit";
+import { isAbusive } from "./content.js";
+import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
 
 // The per-chat session shape (ephemeral conversation state only). Extend as the
 // bot grows. Durable domain data must NOT live here — use the toolkit's
@@ -76,6 +78,16 @@ const MODE_CONFIRM: Record<ExpiryMode, string> = {
 const UPLOAD_EXPIRED_TEXT =
   "This upload is no longer active. Send /upload to start again.";
 
+// Rate limit: at most this many uploads per user within the rolling window.
+const MAX_UPLOADS_PER_HOUR = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RATE_LIMITED_TEXT =
+  "⏳ You've reached the limit of 10 uploads per hour. Please try again later.";
+
+// Shown when the draft trips the spam / content-policy heuristics.
+const ABUSIVE_TEXT =
+  "🚫 That message looks like spam and can't be shared. Please revise it and try again.";
+
 // Shown when the user sends a command the bot does not recognize.
 const UNKNOWN_COMMAND_TEXT =
   "🤔 I don't recognize that command. Use /help to see what I can do.";
@@ -92,6 +104,14 @@ const ERROR_TEXT = "⚠️ Something went wrong. Please try again.";
 export function buildBot(token: string) {
   const bot = createBot<Session>(token, {
     initial: () => ({}),
+  });
+
+  // Per-bot rate limiter. Backed by Redis in production (REDIS_URL) and an
+  // in-process counter in dev/tests. Created here (not module-level) so each
+  // harness bot instance starts with a clean window.
+  const rateLimiter = new RateLimiter(createRateLimitBackend(), {
+    max: MAX_UPLOADS_PER_HOUR,
+    windowMs: RATE_LIMIT_WINDOW_MS,
   });
 
   // /start — greet the user and show the main menu.
@@ -158,6 +178,20 @@ export function buildBot(token: string) {
     if (text.length > MAX_MESSAGE_LENGTH) {
       // Reject oversize input and keep waiting for a valid draft.
       await ctx.reply(tooLongText(text.length));
+      return;
+    }
+    if (isAbusive(text)) {
+      // Reject spam outright and cancel the draft.
+      ctx.session.upload = undefined;
+      await ctx.reply(ABUSIVE_TEXT);
+      return;
+    }
+    // Count this upload against the per-user hourly limit. Checked after the
+    // cheap content checks so rejected garbage doesn't consume the quota.
+    const allowed = await rateLimiter.allow(ctx.from?.id ?? 0);
+    if (!allowed) {
+      ctx.session.upload = undefined;
+      await ctx.reply(RATE_LIMITED_TEXT);
       return;
     }
     ctx.session.upload = { stage: "awaiting_mode", text };

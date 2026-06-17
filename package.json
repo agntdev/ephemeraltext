@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@agntdev/bot-toolkit": "^0.1.0",
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
