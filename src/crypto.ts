@@ -20,6 +20,11 @@ export function generateDataKey(): Buffer {
   return randomBytes(KEY_BYTES);
 }
 
+/** Overwrite a buffer's bytes with zeros to remove key material from memory. */
+export function wipe(buffer: Buffer): void {
+  buffer.fill(0);
+}
+
 /** Encrypt UTF-8 plaintext with the given data key using AES-256-GCM. */
 export function encrypt(plaintext: string, key: Buffer): EncryptedPayload {
   const iv = randomBytes(IV_BYTES);
