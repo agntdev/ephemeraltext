@@ -3,11 +3,15 @@ import { createBot } from "@agntdev/bot-toolkit";
 // The per-chat session shape (ephemeral conversation state only). Extend as the
 // bot grows. Durable domain data must NOT live here — use the toolkit's
 // persistent storage (see AGENTS.md).
+// How an ephemeral message expires once it is shared.
+export type ExpiryMode = "first-read" | "time-limited";
+
 // An in-progress /upload. The draft text lives in the session (ephemeral
 // conversation state) until later steps validate, encrypt and persist it.
 export interface UploadDraft {
-  stage: "awaiting_text" | "ready";
+  stage: "awaiting_text" | "awaiting_mode" | "ready";
   text?: string;
+  mode?: ExpiryMode;
 }
 
 export interface Session {
@@ -44,6 +48,33 @@ const HELP_TEXT =
 // /upload — prompt shown when the user starts a new ephemeral message.
 const UPLOAD_PROMPT =
   "📝 Send me the text you want to share as an ephemeral message.";
+
+// The maximum length of an ephemeral message, in characters.
+const MAX_MESSAGE_LENGTH = 10000;
+
+// Shown when the user's draft exceeds the size limit (they stay in the prompt).
+function tooLongText(length: number): string {
+  return `⚠️ That message is too long (${length} characters). The maximum is 10,000 characters. Please send a shorter message and try again.`;
+}
+
+// Asks the user how the message should expire, once a valid draft is captured.
+const MODE_PROMPT = "✅ Got your message. How should it expire?";
+const MODE_MENU = {
+  inline_keyboard: [
+    [{ text: "👁 First read", callback_data: "upload:mode:first-read" }],
+    [{ text: "⏱ Time-limited", callback_data: "upload:mode:time-limited" }],
+  ],
+};
+
+// Confirmation shown after an expiry mode is selected.
+const MODE_CONFIRM: Record<ExpiryMode, string> = {
+  "first-read": "👁 This message will self-destruct after it is read once.",
+  "time-limited": "⏱ This message will expire after a time limit.",
+};
+
+// Shown if a mode button is tapped but the upload draft is no longer pending.
+const UPLOAD_EXPIRED_TEXT =
+  "This upload is no longer active. Send /upload to start again.";
 
 // Shown when the user sends a command the bot does not recognize.
 const UNKNOWN_COMMAND_TEXT =
@@ -91,6 +122,16 @@ export function buildBot(token: string) {
       await ctx.editMessageText(NEW_MESSAGE_TEXT, { reply_markup: BACK_MENU });
     } else if (data === "menu:about") {
       await ctx.editMessageText(ABOUT_TEXT, { reply_markup: BACK_MENU });
+    } else if (data === "upload:mode:first-read" || data === "upload:mode:time-limited") {
+      const mode: ExpiryMode =
+        data === "upload:mode:first-read" ? "first-read" : "time-limited";
+      const draft = ctx.session.upload;
+      if (draft?.stage === "awaiting_mode" && draft.text) {
+        ctx.session.upload = { stage: "ready", text: draft.text, mode };
+        await ctx.editMessageText(MODE_CONFIRM[mode]);
+      } else {
+        await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+      }
     }
 
     // Always stop the client-side loading spinner.
@@ -114,10 +155,13 @@ export function buildBot(token: string) {
       return;
     }
     const text = ctx.message.text;
-    ctx.session.upload = { stage: "ready", text };
-    await ctx.reply(
-      `✅ Got your message (${text.length} characters). It's ready to be sealed.`,
-    );
+    if (text.length > MAX_MESSAGE_LENGTH) {
+      // Reject oversize input and keep waiting for a valid draft.
+      await ctx.reply(tooLongText(text.length));
+      return;
+    }
+    ctx.session.upload = { stage: "awaiting_mode", text };
+    await ctx.reply(MODE_PROMPT, { reply_markup: MODE_MENU });
   });
 
   // Global error boundary — an unhandled error in any handler replies gracefully
