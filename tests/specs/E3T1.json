@@ -1,0 +1,18 @@
+[
+  {
+    "name": "/read without a token shows usage",
+    "steps": [
+      { "send": { "text": "/read" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "Usage: /read <token>\n\nThe token is the last part of a share link (…/r/<token>)." } } ] }
+    ]
+  },
+  {
+    "name": "/read with an unknown token reports it is gone",
+    "steps": [
+      { "send": { "text": "/read nonexistenttoken123" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "❓ That message doesn't exist or has already been viewed." } } ] }
+    ]
+  }
+]

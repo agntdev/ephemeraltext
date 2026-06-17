@@ -4,6 +4,7 @@ import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
 import { createMessageStore, generatePublicToken, newMessage } from "./messages.js";
 import { encrypt, generateDataKey } from "./crypto.js";
 import { createKms } from "./kms.js";
+import { readMessage } from "./retrieval.js";
 import type { ExpiryMode } from "./types.js";
 
 export type { ExpiryMode };
@@ -106,6 +107,15 @@ const RATE_LIMITED_TEXT =
 const ABUSIVE_TEXT =
   "🚫 That message looks like spam and can't be shared. Please revise it and try again.";
 
+// /read — copy for viewing a shared message by its public token.
+const READ_USAGE_TEXT =
+  "Usage: /read <token>\n\nThe token is the last part of a share link (…/r/<token>).";
+const READ_NOT_FOUND_TEXT =
+  "❓ That message doesn't exist or has already been viewed.";
+const READ_EXPIRED_TEXT = "⌛ That message has expired and is no longer available.";
+const ONE_TIME_VIEW_NOTICE =
+  "\n\n🔥 This was a one-time message — it has now been permanently deleted.";
+
 // Shown when the user sends a command the bot does not recognize.
 const UNKNOWN_COMMAND_TEXT =
   "🤔 I don't recognize that command. Use /help to see what I can do.";
@@ -153,6 +163,27 @@ export function buildBot(token: string) {
   bot.command("upload", async (ctx) => {
     ctx.session.upload = { stage: "awaiting_text" };
     await ctx.reply(UPLOAD_PROMPT);
+  });
+
+  // /read <token> — view a shared message, enforcing its expiry policy. Backs
+  // the same retrieval service a web frontend would call.
+  bot.command("read", async (ctx) => {
+    const token = ctx.match.trim();
+    if (!token) {
+      await ctx.reply(READ_USAGE_TEXT);
+      return;
+    }
+    const result = await readMessage(messageStore, kms, token);
+    if (result.status === "not_found") {
+      await ctx.reply(READ_NOT_FOUND_TEXT);
+      return;
+    }
+    if (result.status === "expired") {
+      await ctx.reply(READ_EXPIRED_TEXT);
+      return;
+    }
+    const notice = result.oneTimeView ? ONE_TIME_VIEW_NOTICE : "";
+    await ctx.reply(`📨 ${result.text}${notice}`);
   });
 
   // Main-menu navigation. Each branch routes to a top-level feature and offers
