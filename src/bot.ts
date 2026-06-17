@@ -1,4 +1,4 @@
-import { createBot } from "@agntdev/bot-toolkit";
+import { createBot, type BotContext } from "@agntdev/bot-toolkit";
 import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
 import { createMessageStore, generatePublicToken, newMessage } from "./messages.js";
@@ -16,7 +16,7 @@ export type { ExpiryMode };
 // An in-progress /upload. The draft text lives in the session (ephemeral
 // conversation state) until later steps validate, encrypt and persist it.
 export interface UploadDraft {
-  stage: "awaiting_text" | "awaiting_mode" | "ready";
+  stage: "awaiting_text" | "awaiting_mode" | "awaiting_duration" | "ready";
   text?: string;
   mode?: ExpiryMode;
 }
@@ -76,7 +76,22 @@ const MODE_MENU = {
 // Short description of each expiry mode, used in the shareable-link message.
 const MODE_DESCRIPTION: Record<ExpiryMode, string> = {
   "first-read": "👁 It will self-destruct after it is read once.",
-  "time-limited": "⏱ It will expire after a time limit.",
+  "time-limited": "⏱ It will expire after the selected time limit.",
+};
+
+// Selectable time-limited durations (label + milliseconds). Capped at 7 days.
+const DURATIONS: { key: string; label: string; ms: number }[] = [
+  { key: "1h", label: "1 hour", ms: 60 * 60 * 1000 },
+  { key: "1d", label: "1 day", ms: 24 * 60 * 60 * 1000 },
+  { key: "7d", label: "7 days", ms: 7 * 24 * 60 * 60 * 1000 },
+];
+const DURATION_BY_KEY = new Map(DURATIONS.map((d) => [d.key, d]));
+
+const DURATION_PROMPT = "⏱ How long should this message stay available?";
+const DURATION_MENU = {
+  inline_keyboard: DURATIONS.map((d) => [
+    { text: d.label, callback_data: `upload:ttl:${d.key}` },
+  ]),
 };
 
 // Base URL the public share links are built from. Production sets PUBLIC_BASE_URL;
@@ -148,6 +163,29 @@ export function buildBot(token: string) {
   // Key management for envelope encryption (AWS KMS in prod, local key otherwise).
   const kms = createKms();
 
+  // Seal a captured draft: encrypt under a fresh data key, persist a Message, and
+  // edit the prompt into the shareable-link message. Shared by both expiry modes.
+  async function sealDraft(
+    ctx: BotContext<Session>,
+    text: string,
+    mode: ExpiryMode,
+    expiresAt: number | null,
+  ): Promise<void> {
+    const token = generatePublicToken();
+    const dataKey = generateDataKey();
+    const message = newMessage({
+      publicToken: token,
+      encryptedPayload: encrypt(text, dataKey),
+      wrappedDataKey: await kms.wrap(dataKey),
+      mode,
+      createdAt: Date.now(),
+      expiresAt,
+    });
+    await messageStore.save(message);
+    ctx.session.upload = undefined;
+    await ctx.editMessageText(sealedText(mode, shareLink(token)));
+  }
+
   // /start — greet the user and show the main menu.
   bot.command("start", async (ctx) => {
     await ctx.reply(WELCOME, { reply_markup: MAIN_MENU });
@@ -197,26 +235,33 @@ export function buildBot(token: string) {
       await ctx.editMessageText(NEW_MESSAGE_TEXT, { reply_markup: BACK_MENU });
     } else if (data === "menu:about") {
       await ctx.editMessageText(ABOUT_TEXT, { reply_markup: BACK_MENU });
-    } else if (data === "upload:mode:first-read" || data === "upload:mode:time-limited") {
-      const mode: ExpiryMode =
-        data === "upload:mode:first-read" ? "first-read" : "time-limited";
+    } else if (data === "upload:mode:first-read") {
+      // First-read messages seal immediately — no expiry timestamp.
       const draft = ctx.session.upload;
       if (draft?.stage === "awaiting_mode" && draft.text) {
-        // Seal the draft: encrypt the text under a fresh per-message data key,
-        // store it under a public token, and hand back the shareable link. The
-        // draft is then cleared from the session.
-        const token = generatePublicToken();
-        const dataKey = generateDataKey();
-        const message = newMessage({
-          publicToken: token,
-          encryptedPayload: encrypt(draft.text, dataKey),
-          wrappedDataKey: await kms.wrap(dataKey),
-          mode,
-          createdAt: Date.now(),
-        });
-        await messageStore.save(message);
-        ctx.session.upload = undefined;
-        await ctx.editMessageText(sealedText(mode, shareLink(token)));
+        await sealDraft(ctx, draft.text, "first-read", null);
+      } else {
+        await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+      }
+    } else if (data === "upload:mode:time-limited") {
+      // Time-limited messages need a duration before they can be sealed.
+      const draft = ctx.session.upload;
+      if (draft?.stage === "awaiting_mode" && draft.text) {
+        ctx.session.upload = {
+          stage: "awaiting_duration",
+          text: draft.text,
+          mode: "time-limited",
+        };
+        await ctx.editMessageText(DURATION_PROMPT, { reply_markup: DURATION_MENU });
+      } else {
+        await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+      }
+    } else if (data.startsWith("upload:ttl:")) {
+      // A duration was chosen — seal with an absolute expiry (<= 7 days out).
+      const duration = DURATION_BY_KEY.get(data.slice("upload:ttl:".length));
+      const draft = ctx.session.upload;
+      if (duration && draft?.stage === "awaiting_duration" && draft.text) {
+        await sealDraft(ctx, draft.text, "time-limited", Date.now() + duration.ms);
       } else {
         await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
       }
