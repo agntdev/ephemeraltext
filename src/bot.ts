@@ -19,7 +19,9 @@ export function buildBot(token: string) {
   });
 
   bot.command("start", async (ctx) => {
-    await ctx.reply("Welcome! I am ready to help.");
+    await ctx.reply(
+      "🔥 Welcome to EphemeralText — send encrypted, self-destructing messages. Use /help to get started.",
+    );
   });
 
   return bot;
