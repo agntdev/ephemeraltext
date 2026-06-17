@@ -30,6 +30,17 @@ const BACK_MENU = {
   inline_keyboard: [[{ text: "⬅️ Back", callback_data: "menu:home" }]],
 };
 
+// /help body — lists the commands the bot understands.
+const HELP_TEXT =
+  "❓ EphemeralText — Help\n\nAvailable commands:\n/start — open the main menu\n/help — show this help\n\nUse /start to create and share encrypted, self-destructing messages.";
+
+// Shown when the user sends a command the bot does not recognize.
+const UNKNOWN_COMMAND_TEXT =
+  "🤔 I don't recognize that command. Use /help to see what I can do.";
+
+// Shown by the global error boundary when a handler throws unexpectedly.
+const ERROR_TEXT = "⚠️ Something went wrong. Please try again.";
+
 /**
  * buildBot — assembles the bot and registers every handler, but does NOT start
  * it. Shared by the runtime entry (src/index.ts) and the Tests-gate harness
@@ -44,6 +55,11 @@ export function buildBot(token: string) {
   // /start — greet the user and show the main menu.
   bot.command("start", async (ctx) => {
     await ctx.reply(WELCOME, { reply_markup: MAIN_MENU });
+  });
+
+  // /help — list the commands the bot understands.
+  bot.command("help", async (ctx) => {
+    await ctx.reply(HELP_TEXT);
   });
 
   // Main-menu navigation. Each branch routes to a top-level feature and offers
@@ -61,6 +77,25 @@ export function buildBot(token: string) {
 
     // Always stop the client-side loading spinner.
     await ctx.answerCallbackQuery();
+  });
+
+  // Unknown-command fallback. Registered AFTER every command handler, so it only
+  // fires for command-looking messages that no command() above matched. Filtering
+  // on the bot_command entity means plain free-text input is never swallowed.
+  bot.on("message:entities:bot_command", async (ctx) => {
+    await ctx.reply(UNKNOWN_COMMAND_TEXT);
+  });
+
+  // Global error boundary — an unhandled error in any handler replies gracefully
+  // instead of crashing the bot. The secondary reply is itself guarded so a
+  // failure while reporting the error can't throw again.
+  bot.catch(async (err) => {
+    console.error("Unhandled bot error:", err.error);
+    try {
+      await err.ctx.reply(ERROR_TEXT);
+    } catch (replyErr) {
+      console.error("Failed to send error reply:", replyErr);
+    }
   });
 
   return bot;
