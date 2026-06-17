@@ -115,17 +115,27 @@ export function createMessageStore(): MessageStore {
   return new MemoryMessageStore();
 }
 
-// A public token carries at least 132 bits of entropy. 17 random bytes are
-// 136 bits, encoded URL-safe (base64url → only A-Za-z0-9_- characters).
-const TOKEN_BYTES = 17;
+// Public tokens are 22 characters drawn from a 64-symbol URL-safe alphabet, i.e.
+// 22 * log2(64) = 132 bits of entropy — large enough to make guessing a valid
+// token infeasible.
+const TOKEN_LENGTH = 22;
+const URL_SAFE_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/** Generate a high-entropy, URL-safe public token (>= 132 bits). */
+/** Generate a 22-character, URL-safe public token (~132 bits of entropy). */
 export function generatePublicToken(): string {
-  return randomBytes(TOKEN_BYTES).toString("base64url");
+  // 256 % 64 === 0, so masking each random byte with & 63 selects uniformly from
+  // the 64-symbol alphabet with no modulo bias.
+  const bytes = randomBytes(TOKEN_LENGTH);
+  let token = "";
+  for (let i = 0; i < TOKEN_LENGTH; i++) {
+    token += URL_SAFE_ALPHABET[bytes[i] & 63];
+  }
+  return token;
 }
 
-// A valid token is base64url (A-Za-z0-9_-). 17 bytes encode to 23 chars; allow a
-// small range so the check is robust to token-size tweaks.
+// A valid token is URL-safe (A-Za-z0-9_-). New tokens are 22 chars; the range
+// also accepts the slightly longer tokens minted before this change.
 const TOKEN_RE = /^[A-Za-z0-9_-]{22,24}$/;
 
 /** True if `token` has the shape of a public token (cheap pre-lookup check). */

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "sealing still works with 22-character tokens",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "High entropy please" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:first-read", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  },
+  {
+    "name": "a 22-character token is accepted as a valid format",
+    "steps": [
+      { "send": { "text": "/read AbCdEfGhIjKlMnOpQrStUv" },
+        "expect": [ { "method": "sendMessage",
+          "payload": { "text": "❓ That message doesn't exist or has already been viewed." } } ] }
+    ]
+  }
+]
