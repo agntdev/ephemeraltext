@@ -1,7 +1,7 @@
 import { createBot } from "@agntdev/bot-toolkit";
 import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
-import { createMessageStore, generatePublicToken } from "./messages.js";
+import { createMessageStore, generatePublicToken, newMessage } from "./messages.js";
 import { encrypt, generateDataKey } from "./crypto.js";
 import { createKms } from "./kms.js";
 import type { ExpiryMode } from "./types.js";
@@ -176,14 +176,14 @@ export function buildBot(token: string) {
         // draft is then cleared from the session.
         const token = generatePublicToken();
         const dataKey = generateDataKey();
-        const payload = encrypt(draft.text, dataKey);
-        const wrappedDataKey = await kms.wrap(dataKey);
-        await messageStore.save(token, {
-          payload,
-          wrappedDataKey,
+        const message = newMessage({
+          publicToken: token,
+          encryptedPayload: encrypt(draft.text, dataKey),
+          wrappedDataKey: await kms.wrap(dataKey),
           mode,
           createdAt: Date.now(),
         });
+        await messageStore.save(message);
         ctx.session.upload = undefined;
         await ctx.editMessageText(sealedText(mode, shareLink(token)));
       } else {

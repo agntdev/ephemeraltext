@@ -1,0 +1,11 @@
+[
+  {
+    "name": "sealing persists a Message entity and returns a link",
+    "steps": [
+      { "send": { "text": "/upload" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "text": "Persist me securely" }, "expect": [ { "method": "sendMessage" } ] },
+      { "send": { "callback": "upload:mode:time-limited", "messageId": 100 },
+        "expect": [ { "method": "editMessageText" } ] }
+    ]
+  }
+]
