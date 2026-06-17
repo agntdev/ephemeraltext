@@ -202,12 +202,31 @@ export function buildBot(token: string) {
   // Append-only audit log of admin actions (Redis in prod, in-process otherwise).
   const auditLog = createAuditLog();
 
+  // Record an admin action to the audit log. Operator ids are hashed (HMAC) and
+  // entries never contain message plaintext — only the action, hashed operator,
+  // optional target token, and a timestamp.
+  async function logAdmin(
+    ctx: BotContext<Session>,
+    action: string,
+    target?: string,
+  ): Promise<void> {
+    await auditLog.record({
+      action,
+      operator: hashSenderId(ctx.from!.id),
+      target,
+      at: Date.now(),
+    });
+  }
+
   // Admin views, shared by the /admin subcommands and the inline-menu buttons.
+  // Each view is itself an admin action and is recorded to the audit log.
   async function showMetrics(ctx: BotContext<Session>): Promise<void> {
+    await logAdmin(ctx, "metrics");
     const stored = await messageStore.count();
     await ctx.reply(`📊 Messages currently stored: ${stored}`);
   }
   async function showLogs(ctx: BotContext<Session>): Promise<void> {
+    await logAdmin(ctx, "logs");
     const entries = await auditLog.recent(10);
     await ctx.reply(entries.length ? formatAuditLog(entries) : ADMIN_NO_LOGS_TEXT);
   }
@@ -305,12 +324,7 @@ export function buildBot(token: string) {
       }
       const existing = await messageStore.load(token);
       await messageStore.delete(token);
-      await auditLog.record({
-        action: "delete",
-        operator: hashSenderId(ctx.from!.id),
-        target: token,
-        at: Date.now(),
-      });
+      await logAdmin(ctx, "delete", token);
       await ctx.reply(
         existing ? `🗑 Message ${token} deleted.` : `Message ${token} was not found.`,
       );
