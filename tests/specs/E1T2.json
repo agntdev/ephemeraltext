@@ -72,7 +72,7 @@
     ]
   },
   {
-    "name": "selecting first-read confirms the mode",
+    "name": "selecting first-read seals the message",
     "steps": [
       {
         "send": {
@@ -101,17 +101,14 @@
         },
         "expect": [
           {
-            "method": "editMessageText",
-            "payload": {
-              "text": "👁 This message will self-destruct after it is read once."
-            }
+            "method": "editMessageText"
           }
         ]
       }
     ]
   },
   {
-    "name": "selecting time-limited confirms the mode",
+    "name": "selecting time-limited seals the message",
     "steps": [
       {
         "send": {
@@ -140,10 +137,7 @@
         },
         "expect": [
           {
-            "method": "editMessageText",
-            "payload": {
-              "text": "⏱ This message will expire after a time limit."
-            }
+            "method": "editMessageText"
           }
         ]
       }

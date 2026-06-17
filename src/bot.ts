@@ -1,12 +1,14 @@
 import { createBot } from "@agntdev/bot-toolkit";
 import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
+import { createMessageStore, generatePublicToken } from "./messages.js";
+import type { ExpiryMode } from "./types.js";
+
+export type { ExpiryMode };
 
 // The per-chat session shape (ephemeral conversation state only). Extend as the
 // bot grows. Durable domain data must NOT live here — use the toolkit's
 // persistent storage (see AGENTS.md).
-// How an ephemeral message expires once it is shared.
-export type ExpiryMode = "first-read" | "time-limited";
 
 // An in-progress /upload. The draft text lives in the session (ephemeral
 // conversation state) until later steps validate, encrypt and persist it.
@@ -68,11 +70,25 @@ const MODE_MENU = {
   ],
 };
 
-// Confirmation shown after an expiry mode is selected.
-const MODE_CONFIRM: Record<ExpiryMode, string> = {
-  "first-read": "👁 This message will self-destruct after it is read once.",
-  "time-limited": "⏱ This message will expire after a time limit.",
+// Short description of each expiry mode, used in the shareable-link message.
+const MODE_DESCRIPTION: Record<ExpiryMode, string> = {
+  "first-read": "👁 It will self-destruct after it is read once.",
+  "time-limited": "⏱ It will expire after a time limit.",
 };
+
+// Base URL the public share links are built from. Production sets PUBLIC_BASE_URL;
+// the placeholder matches the spec's example domain for dev/tests.
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? "https://example.com";
+
+// Build the public, shareable link for a stored message token.
+function shareLink(token: string): string {
+  return `${PUBLIC_BASE_URL.replace(/\/$/, "")}/r/${token}`;
+}
+
+// The message shown once a draft is sealed and its share link is generated.
+function sealedText(mode: ExpiryMode, link: string): string {
+  return `✅ Your ephemeral message is ready!\n\nShare this link:\n${link}\n\n${MODE_DESCRIPTION[mode]}`;
+}
 
 // Shown if a mode button is tapped but the upload draft is no longer pending.
 const UPLOAD_EXPIRED_TEXT =
@@ -114,6 +130,9 @@ export function buildBot(token: string) {
     windowMs: RATE_LIMIT_WINDOW_MS,
   });
 
+  // Durable store for shared messages (Redis in prod, in-process in dev/tests).
+  const messageStore = createMessageStore();
+
   // /start — greet the user and show the main menu.
   bot.command("start", async (ctx) => {
     await ctx.reply(WELCOME, { reply_markup: MAIN_MENU });
@@ -147,8 +166,16 @@ export function buildBot(token: string) {
         data === "upload:mode:first-read" ? "first-read" : "time-limited";
       const draft = ctx.session.upload;
       if (draft?.stage === "awaiting_mode" && draft.text) {
-        ctx.session.upload = { stage: "ready", text: draft.text, mode };
-        await ctx.editMessageText(MODE_CONFIRM[mode]);
+        // Seal the draft: store it under a fresh public token and hand back the
+        // shareable link. The draft is then cleared from the session.
+        const token = generatePublicToken();
+        await messageStore.save(token, {
+          text: draft.text,
+          mode,
+          createdAt: Date.now(),
+        });
+        ctx.session.upload = undefined;
+        await ctx.editMessageText(sealedText(mode, shareLink(token)));
       } else {
         await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
       }

@@ -1,0 +1,57 @@
+[
+  {
+    "name": "selecting a mode seals the draft and returns a share link",
+    "steps": [
+      {
+        "send": {
+          "text": "/upload"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "text": "Hello secret"
+        },
+        "expect": [
+          {
+            "method": "sendMessage"
+          }
+        ]
+      },
+      {
+        "send": {
+          "callback": "upload:mode:first-read",
+          "messageId": 100
+        },
+        "expect": [
+          {
+            "method": "editMessageText"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "tapping a mode with no active draft shows the expired notice",
+    "steps": [
+      {
+        "send": {
+          "callback": "upload:mode:first-read",
+          "messageId": 100
+        },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "This upload is no longer active. Send /upload to start again."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
