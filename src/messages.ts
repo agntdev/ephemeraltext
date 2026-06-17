@@ -1,5 +1,5 @@
 import { Redis } from "ioredis";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { ExpiryMode } from "./types.js";
 import type { EncryptedPayload } from "./crypto.js";
 import type { WrappedDataKey } from "./kms.js";
@@ -9,55 +9,90 @@ import type { WrappedDataKey } from "./kms.js";
 // an in-process map fallback — production ALWAYS sets REDIS_URL, so the fallback
 // is never the production store.
 
-export interface StoredMessage {
+// The persisted Message entity. The schema is store-agnostic: the Redis backend
+// keeps one JSON document per public token; a SQL backend would map these fields
+// to columns of a `messages` table (public_token UNIQUE, encrypted_payload JSONB,
+// mode, created_at, expires_at, read_count, …).
+export interface Message {
+  // Internal unique id (primary key).
+  id: string;
+  // Public, high-entropy token used in the share link (unique lookup key).
+  publicToken: string;
   // The message text, encrypted under its own per-message data key.
-  payload: EncryptedPayload;
+  encryptedPayload: EncryptedPayload;
   // The per-message data key, wrapped by the KMS master key (envelope encryption).
+  wrappedDataKey: WrappedDataKey;
+  // How the message expires.
+  mode: ExpiryMode;
+  // Creation time (ms since epoch).
+  createdAt: number;
+  // Absolute expiry (ms since epoch) for time-limited messages; null otherwise.
+  expiresAt: number | null;
+  // Number of successful reads so far.
+  readCount: number;
+}
+
+/** Build a new Message entity from the sealed-draft inputs. */
+export function newMessage(fields: {
+  publicToken: string;
+  encryptedPayload: EncryptedPayload;
   wrappedDataKey: WrappedDataKey;
   mode: ExpiryMode;
   createdAt: number;
+  expiresAt?: number | null;
+}): Message {
+  return {
+    id: randomUUID(),
+    publicToken: fields.publicToken,
+    encryptedPayload: fields.encryptedPayload,
+    wrappedDataKey: fields.wrappedDataKey,
+    mode: fields.mode,
+    createdAt: fields.createdAt,
+    expiresAt: fields.expiresAt ?? null,
+    readCount: 0,
+  };
 }
 
 export interface MessageStore {
-  save(token: string, message: StoredMessage): Promise<void>;
-  load(token: string): Promise<StoredMessage | null>;
-  delete(token: string): Promise<void>;
+  save(message: Message): Promise<void>;
+  load(publicToken: string): Promise<Message | null>;
+  delete(publicToken: string): Promise<void>;
 }
 
 const keyFor = (token: string) => `message:${token}`;
 
-/** Redis-backed store: one JSON value per message token. */
+/** Redis-backed store: one JSON document per message token. */
 export class RedisMessageStore implements MessageStore {
   constructor(private readonly redis: Redis) {}
 
-  async save(token: string, message: StoredMessage): Promise<void> {
-    await this.redis.set(keyFor(token), JSON.stringify(message));
+  async save(message: Message): Promise<void> {
+    await this.redis.set(keyFor(message.publicToken), JSON.stringify(message));
   }
 
-  async load(token: string): Promise<StoredMessage | null> {
-    const raw = await this.redis.get(keyFor(token));
-    return raw ? (JSON.parse(raw) as StoredMessage) : null;
+  async load(publicToken: string): Promise<Message | null> {
+    const raw = await this.redis.get(keyFor(publicToken));
+    return raw ? (JSON.parse(raw) as Message) : null;
   }
 
-  async delete(token: string): Promise<void> {
-    await this.redis.del(keyFor(token));
+  async delete(publicToken: string): Promise<void> {
+    await this.redis.del(keyFor(publicToken));
   }
 }
 
 /** In-process store for local dev and the tokenless test harness only. */
 export class MemoryMessageStore implements MessageStore {
-  private readonly messages = new Map<string, StoredMessage>();
+  private readonly messages = new Map<string, Message>();
 
-  async save(token: string, message: StoredMessage): Promise<void> {
-    this.messages.set(keyFor(token), message);
+  async save(message: Message): Promise<void> {
+    this.messages.set(keyFor(message.publicToken), message);
   }
 
-  async load(token: string): Promise<StoredMessage | null> {
-    return this.messages.get(keyFor(token)) ?? null;
+  async load(publicToken: string): Promise<Message | null> {
+    return this.messages.get(keyFor(publicToken)) ?? null;
   }
 
-  async delete(token: string): Promise<void> {
-    this.messages.delete(keyFor(token));
+  async delete(publicToken: string): Promise<void> {
+    this.messages.delete(keyFor(publicToken));
   }
 }
 
