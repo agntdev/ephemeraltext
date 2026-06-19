@@ -1,4 +1,4 @@
-import { createBot, type BotContext } from "@agntdev/bot-toolkit";
+import { createBot, type BotContext } from "./toolkit/index.js";
 import { isAbusive } from "./content.js";
 import { RateLimiter, createRateLimitBackend } from "./ratelimit.js";
 import {
