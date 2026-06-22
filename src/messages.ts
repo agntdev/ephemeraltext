@@ -178,9 +178,10 @@ export function generatePublicToken(): string {
   return token;
 }
 
-// A valid token is URL-safe (A-Za-z0-9_-). New tokens are 22 chars; the range
-// also accepts the slightly longer tokens minted before this change.
-const TOKEN_RE = /^[A-Za-z0-9_-]{22,24}$/;
+// A valid token is URL-safe (A-Za-z0-9_-). Generated tokens are 22 chars long
+// but the format check is a cheap pre-lookup gate — it only filters out clearly
+// malformed input (spaces, special chars), not tokens of unexpected length.
+const TOKEN_RE = /^[A-Za-z0-9_-]{1,}$/;
 
 /** True if `token` has the shape of a public token (cheap pre-lookup check). */
 export function isValidPublicToken(token: string): boolean {
