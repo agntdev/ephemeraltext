@@ -44,7 +44,11 @@ export class MemoryRateLimitBackend implements RateLimitBackend {
 
   async hit(key: string, now: number, windowMs: number): Promise<number> {
     const cutoff = now - windowMs;
-    const kept = (this.events.get(key) ?? []).filter((t) => t > cutoff);
+    const entries = this.events.get(key) ?? [];
+    const kept = entries.filter((t) => t > cutoff);
+    if (entries.length > 0 && kept.length === 0) {
+      this.events.delete(key);
+    }
     kept.push(now);
     this.events.set(key, kept);
     return kept.length;
