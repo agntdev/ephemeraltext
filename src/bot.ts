@@ -7,7 +7,7 @@ import {
   isValidPublicToken,
   newMessage,
 } from "./messages.js";
-import { encrypt, generateDataKey } from "./crypto.js";
+import { encrypt, generateDataKey, wipe } from "./crypto.js";
 import { createKms } from "./kms.js";
 import { readMessage } from "./retrieval.js";
 import { isAdmin } from "./admin.js";
@@ -250,6 +250,7 @@ export function buildBot(token: string) {
       createdAt: now,
       expiresAt,
     });
+    wipe(dataKey);
     // Schedule automatic deletion: at the expiry for time-limited messages, or a
     // retention cap for first-read messages that are never opened.
     const ttlMs =
