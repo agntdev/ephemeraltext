@@ -130,6 +130,12 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMITED_TEXT =
   "⏳ You've reached the limit of 10 uploads per hour. Please try again later.";
 
+// Rate limit for admin commands (metrics/logs/delete) — prevents abuse of
+// expensive operations like Redis SCAN and audit-log flooding.
+const MAX_ADMIN_CMDS_PER_HOUR = 10;
+const ADMIN_RATE_LIMITED_TEXT =
+  "⏳ You've reached the limit of 10 admin commands per hour. Please try again later.";
+
 // Shown when the draft trips the spam / content-policy heuristics.
 const ABUSIVE_TEXT =
   "🚫 That message looks like spam and can't be shared. Please revise it and try again.";
@@ -191,6 +197,15 @@ export function buildBot(token: string) {
   const rateLimiter = new RateLimiter(createRateLimitBackend(), {
     max: MAX_UPLOADS_PER_HOUR,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    namespace: "upload",
+  });
+
+  // Admin-rate limiter (separate namespace so admin quotas don't consume upload
+  // quota and vice versa).
+  const adminRateLimiter = new RateLimiter(createRateLimitBackend(), {
+    max: MAX_ADMIN_CMDS_PER_HOUR,
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    namespace: "admin",
   });
 
   // Durable store for shared messages (Redis in prod, in-process in dev/tests).
@@ -313,6 +328,13 @@ export function buildBot(token: string) {
     }
     const args = ctx.match.trim().split(/\s+/).filter(Boolean);
     const sub = args[0]?.toLowerCase();
+    if (sub === "metrics" || sub === "logs" || sub === "delete") {
+      const allowed = await adminRateLimiter.allow(ctx.from!.id);
+      if (!allowed) {
+        await ctx.reply(ADMIN_RATE_LIMITED_TEXT);
+        return;
+      }
+    }
     if (sub === "metrics") {
       await showMetrics(ctx);
     } else if (sub === "logs") {
@@ -379,10 +401,15 @@ export function buildBot(token: string) {
       } else if (data === "admin:metrics" || data === "admin:logs") {
         if (!isAdmin(ctx.from?.id)) {
           await ctx.reply(ADMIN_DENIED_TEXT);
-        } else if (data === "admin:metrics") {
-          await showMetrics(ctx);
         } else {
-          await showLogs(ctx);
+          const allowed = await adminRateLimiter.allow(ctx.from.id);
+          if (!allowed) {
+            await ctx.reply(ADMIN_RATE_LIMITED_TEXT);
+          } else if (data === "admin:metrics") {
+            await showMetrics(ctx);
+          } else {
+            await showLogs(ctx);
+          }
         }
       }
     } finally {
