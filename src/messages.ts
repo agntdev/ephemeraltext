@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { ExpiryMode } from "./types.js";
 import type { EncryptedPayload } from "./crypto.js";
 import type { WrappedDataKey } from "./kms.js";
+import { getRedis } from "./redis.js";
 
 // Durable storage for shared ephemeral messages, keyed by their public token.
 // Production uses Redis (REDIS_URL); local dev and the tokenless test harness use
@@ -131,9 +132,9 @@ export class MemoryMessageStore implements MessageStore {
 
 /** Pick the store based on the runtime environment. */
 export function createMessageStore(): MessageStore {
-  const url = process.env.REDIS_URL;
-  if (url) {
-    return new RedisMessageStore(new Redis(url));
+  const redis = getRedis();
+  if (redis) {
+    return new RedisMessageStore(redis);
   }
   return new MemoryMessageStore();
 }

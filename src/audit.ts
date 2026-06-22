@@ -1,4 +1,5 @@
 import { Redis } from "ioredis";
+import { getRedis } from "./redis.js";
 
 // Append-only audit log of admin actions. Entries NEVER contain message
 // plaintext — only the action, a hashed operator id, an optional target token,
@@ -51,9 +52,9 @@ export class MemoryAuditLog implements AuditLog {
 
 /** Pick the audit log backend based on the runtime environment. */
 export function createAuditLog(): AuditLog {
-  const url = process.env.REDIS_URL;
-  if (url) {
-    return new RedisAuditLog(new Redis(url));
+  const redis = getRedis();
+  if (redis) {
+    return new RedisAuditLog(redis);
   }
   return new MemoryAuditLog();
 }

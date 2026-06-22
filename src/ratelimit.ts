@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import { hashSenderId } from "./identity.js";
+import { getRedis } from "./redis.js";
 
 // Per-user upload rate limiting. Counters must survive restarts, so production
 // keeps them in Redis (REDIS_URL). The tokenless test harness and local dev have
@@ -52,9 +53,9 @@ export class MemoryRateLimitBackend implements RateLimitBackend {
 
 /** Pick the backend based on the runtime environment. */
 export function createRateLimitBackend(): RateLimitBackend {
-  const url = process.env.REDIS_URL;
-  if (url) {
-    return new RedisRateLimitBackend(new Redis(url));
+  const redis = getRedis();
+  if (redis) {
+    return new RedisRateLimitBackend(redis);
   }
   return new MemoryRateLimitBackend();
 }
