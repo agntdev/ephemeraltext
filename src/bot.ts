@@ -337,56 +337,58 @@ export function buildBot(token: string) {
   // Main-menu navigation. Each branch routes to a top-level feature and offers
   // a way back, so every button is reachable and does real work.
   bot.on("callback_query:data", async (ctx) => {
-    const data = ctx.callbackQuery.data;
+    try {
+      const data = ctx.callbackQuery.data;
 
-    if (data === "menu:home") {
-      await ctx.editMessageText(WELCOME, { reply_markup: MAIN_MENU });
-    } else if (data === "menu:new") {
-      await ctx.editMessageText(NEW_MESSAGE_TEXT, { reply_markup: BACK_MENU });
-    } else if (data === "menu:about") {
-      await ctx.editMessageText(ABOUT_TEXT, { reply_markup: BACK_MENU });
-    } else if (data === "upload:mode:first-read") {
-      // First-read messages seal immediately — no expiry timestamp.
-      const draft = ctx.session.upload;
-      if (draft?.stage === "awaiting_mode" && draft.text) {
-        await sealDraft(ctx, draft.text, "first-read", null);
-      } else {
-        await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+      if (data === "menu:home") {
+        await ctx.editMessageText(WELCOME, { reply_markup: MAIN_MENU });
+      } else if (data === "menu:new") {
+        await ctx.editMessageText(NEW_MESSAGE_TEXT, { reply_markup: BACK_MENU });
+      } else if (data === "menu:about") {
+        await ctx.editMessageText(ABOUT_TEXT, { reply_markup: BACK_MENU });
+      } else if (data === "upload:mode:first-read") {
+        // First-read messages seal immediately — no expiry timestamp.
+        const draft = ctx.session.upload;
+        if (draft?.stage === "awaiting_mode" && draft.text) {
+          await sealDraft(ctx, draft.text, "first-read", null);
+        } else {
+          await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+        }
+      } else if (data === "upload:mode:time-limited") {
+        // Time-limited messages need a duration before they can be sealed.
+        const draft = ctx.session.upload;
+        if (draft?.stage === "awaiting_mode" && draft.text) {
+          ctx.session.upload = {
+            stage: "awaiting_duration",
+            text: draft.text,
+            mode: "time-limited",
+          };
+          await ctx.editMessageText(DURATION_PROMPT, { reply_markup: DURATION_MENU });
+        } else {
+          await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+        }
+      } else if (data.startsWith("upload:ttl:")) {
+        // A duration was chosen — seal with an absolute expiry (<= 7 days out).
+        const duration = DURATION_BY_KEY.get(data.slice("upload:ttl:".length));
+        const draft = ctx.session.upload;
+        if (duration && draft?.stage === "awaiting_duration" && draft.text) {
+          await sealDraft(ctx, draft.text, "time-limited", Date.now() + duration.ms);
+        } else {
+          await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
+        }
+      } else if (data === "admin:metrics" || data === "admin:logs") {
+        if (!isAdmin(ctx.from?.id)) {
+          await ctx.reply(ADMIN_DENIED_TEXT);
+        } else if (data === "admin:metrics") {
+          await showMetrics(ctx);
+        } else {
+          await showLogs(ctx);
+        }
       }
-    } else if (data === "upload:mode:time-limited") {
-      // Time-limited messages need a duration before they can be sealed.
-      const draft = ctx.session.upload;
-      if (draft?.stage === "awaiting_mode" && draft.text) {
-        ctx.session.upload = {
-          stage: "awaiting_duration",
-          text: draft.text,
-          mode: "time-limited",
-        };
-        await ctx.editMessageText(DURATION_PROMPT, { reply_markup: DURATION_MENU });
-      } else {
-        await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
-      }
-    } else if (data.startsWith("upload:ttl:")) {
-      // A duration was chosen — seal with an absolute expiry (<= 7 days out).
-      const duration = DURATION_BY_KEY.get(data.slice("upload:ttl:".length));
-      const draft = ctx.session.upload;
-      if (duration && draft?.stage === "awaiting_duration" && draft.text) {
-        await sealDraft(ctx, draft.text, "time-limited", Date.now() + duration.ms);
-      } else {
-        await ctx.editMessageText(UPLOAD_EXPIRED_TEXT);
-      }
-    } else if (data === "admin:metrics" || data === "admin:logs") {
-      if (!isAdmin(ctx.from?.id)) {
-        await ctx.reply(ADMIN_DENIED_TEXT);
-      } else if (data === "admin:metrics") {
-        await showMetrics(ctx);
-      } else {
-        await showLogs(ctx);
-      }
+    } finally {
+      // Always stop the client-side loading spinner.
+      await ctx.answerCallbackQuery();
     }
-
-    // Always stop the client-side loading spinner.
-    await ctx.answerCallbackQuery();
   });
 
   // Unknown-command fallback. Registered AFTER every command handler, so it only
