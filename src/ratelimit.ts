@@ -62,18 +62,20 @@ export function createRateLimitBackend(): RateLimitBackend {
 export interface RateLimiterOptions {
   max: number;
   windowMs: number;
+  /** Redis key namespace (e.g. "upload", "admin"). */
+  namespace: string;
 }
 
-/** Enforces "at most `max` uploads per `windowMs`" per hashed sender id. */
+/** Enforces "at most `max` events per `windowMs`" per hashed sender id. */
 export class RateLimiter {
   constructor(
     private readonly backend: RateLimitBackend,
     private readonly options: RateLimiterOptions,
   ) {}
 
-  /** Record an upload attempt; returns true if it is within the limit. */
+  /** Record an attempt; returns true if it is within the limit. */
   async allow(senderId: number, now: number = Date.now()): Promise<boolean> {
-    const key = `ratelimit:upload:${hashSenderId(senderId)}`;
+    const key = `ratelimit:${this.options.namespace}:${hashSenderId(senderId)}`;
     const count = await this.backend.hit(key, now, this.options.windowMs);
     return count <= this.options.max;
   }
