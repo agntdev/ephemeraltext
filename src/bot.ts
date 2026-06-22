@@ -324,8 +324,8 @@ export function buildBot(token: string) {
         return;
       }
       const existing = await messageStore.load(token);
-      await messageStore.delete(token);
       await logAdmin(ctx, "delete", token);
+      await messageStore.delete(token);
       await ctx.reply(
         existing ? `🗑 Message ${token} deleted.` : `Message ${token} was not found.`,
       );
