@@ -50,8 +50,15 @@ export async function readMessage(
     return { status: "ok", text, oneTimeView: true };
   }
 
-  // Time-limited: keep the message, record the view.
+  // Time-limited: keep the message, record the view. Preserve the original
+  // expiry by re-computing the remaining TTL so the Redis KEY's TTL is
+  // maintained — a SET without EX would remove the existing expiry and
+  // permanently leak the key.
   message.readCount += 1;
-  await store.save(message);
+  const remainingTtl =
+    message.expiresAt !== null
+      ? Math.max(1, Math.ceil((message.expiresAt - now) / 1000))
+      : undefined;
+  await store.save(message, remainingTtl);
   return { status: "ok", text, oneTimeView: false };
 }
