@@ -60,6 +60,10 @@ export interface MessageStore {
   save(message: Message, ttlSeconds?: number): Promise<void>;
   load(publicToken: string): Promise<Message | null>;
   delete(publicToken: string): Promise<void>;
+  // Atomically load and delete a message. Returns the message if it existed, or
+  // null otherwise. Guarantees exactly one caller receives the payload — critical
+  // for one-time-view first-read messages.
+  fetchAndDelete(publicToken: string): Promise<Message | null>;
   // Number of messages currently stored (for admin metrics).
   count(): Promise<number>;
 }
@@ -87,6 +91,15 @@ export class RedisMessageStore implements MessageStore {
 
   async delete(publicToken: string): Promise<void> {
     await this.redis.del(keyFor(publicToken));
+  }
+
+  async fetchAndDelete(publicToken: string): Promise<Message | null> {
+    const raw = (await this.redis.eval(
+      "local v = redis.call('GET', KEYS[1]) if v then redis.call('DEL', KEYS[1]) end return v",
+      1,
+      keyFor(publicToken),
+    )) as string | null;
+    return raw ? (JSON.parse(raw) as Message) : null;
   }
 
   async count(): Promise<number> {
@@ -123,6 +136,13 @@ export class MemoryMessageStore implements MessageStore {
 
   async delete(publicToken: string): Promise<void> {
     this.messages.delete(keyFor(publicToken));
+  }
+
+  async fetchAndDelete(publicToken: string): Promise<Message | null> {
+    const key = keyFor(publicToken);
+    const message = this.messages.get(key) ?? null;
+    this.messages.delete(key);
+    return message;
   }
 
   async count(): Promise<number> {

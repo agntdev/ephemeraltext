@@ -33,6 +33,24 @@ export async function readMessage(
     return { status: "expired" };
   }
 
+  // For first-read messages, atomically fetch and delete the record so that
+  // concurrent readers cannot both retrieve the ciphertext. The load+delete
+  // gap is eliminated at the storage layer (Redis Lua script / Map pop).
+  if (message.mode === "first-read") {
+    const atomic = await store.fetchAndDelete(token);
+    if (!atomic) return { status: "not_found" };
+
+    const dataKey = await kms.unwrap(atomic.wrappedDataKey);
+    let text: string;
+    try {
+      text = decrypt(atomic.encryptedPayload, dataKey);
+    } finally {
+      wipe(dataKey);
+    }
+
+    return { status: "ok", text, oneTimeView: true };
+  }
+
   // Decrypt: unwrap the per-message data key, then decrypt the payload. The key
   // material is wiped from memory as soon as the plaintext is recovered.
   const dataKey = await kms.unwrap(message.wrappedDataKey);
@@ -41,13 +59,6 @@ export async function readMessage(
     text = decrypt(message.encryptedPayload, dataKey);
   } finally {
     wipe(dataKey);
-  }
-
-  if (message.mode === "first-read") {
-    // One-time view: securely delete the record immediately after a successful
-    // read so the ciphertext can never be retrieved again.
-    await store.delete(token);
-    return { status: "ok", text, oneTimeView: true };
   }
 
   // Time-limited: keep the message, record the view. Preserve the original
