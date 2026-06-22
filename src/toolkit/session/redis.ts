@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import type { StorageAdapter } from "grammy";
 import { MemorySessionStorage } from "./memory.js";
+import { getRedis } from "../../redis.js";
 
 /**
  * Redis session storage for production bots (Change 3 / docs/pivot open
@@ -74,12 +75,14 @@ export class RedisSessionStorage<T> implements StorageAdapter<T> {
  * background and reads/writes resolve once connected.
  */
 export function defaultRedisStorage<T>(url: string): StorageAdapter<T> {
+  const shared = getRedis();
+  if (shared) {
+    return new RedisSessionStorage<T>(shared);
+  }
   const require = createRequire(import.meta.url);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ioredis: any = require("ioredis");
   const Redis = ioredis.default ?? ioredis.Redis ?? ioredis;
-  // maxRetriesPerRequest: null → commands queue while (re)connecting rather
-  // than failing fast, matching session-store expectations.
   const client = new Redis(url, { maxRetriesPerRequest: null, lazyConnect: false });
   return new RedisSessionStorage<T>(client as RedisLike);
 }
